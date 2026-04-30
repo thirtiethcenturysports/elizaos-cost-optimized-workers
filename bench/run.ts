@@ -398,7 +398,7 @@ function renderMarkdown(r: RenderInput): string {
   - Cheap-only Haiku: ${fmtPct(accuracyOnDecidable(r.cheap.prompts))}
   - Optimized: ${fmtPct(accuracyOnDecidable(r.optimized.prompts))}
 
-> Mock mode constructs responses to match the expected label, so accuracy ~100% in mock is uninformative. Run \`--mode=live\` to measure real classifier accuracy.
+${r.mode === 'mock' ? '> Mock mode constructs responses to match the expected label, so accuracy ~100% in mock is uninformative. Run `--mode=live` to measure real classifier accuracy.' : '> Accuracy above is real (live API). Sample size is 80 decidable prompts; treat small differences between scenarios as noise.'}
 
 ## Token totals
 
@@ -419,8 +419,8 @@ function renderMarkdown(r: RenderInput): string {
 ## Reproducing
 
 ${fence}bash
-npm run bench                  # mock mode (this run)
-npm run bench -- --mode=live   # live mode, requires ANTHROPIC_API_KEY
+npm run bench                  # mock mode${r.mode === 'mock' ? ' (this run)' : ''}
+npm run bench -- --mode=live   # live mode${r.mode === 'live' ? ' (this run)' : ''}, requires ANTHROPIC_API_KEY
 ${fence}
 
 Live mode hits the real Anthropic API and counts real tokens. Mock mode uses

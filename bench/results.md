@@ -1,39 +1,39 @@
 # Benchmark Results
 
-**Mode:** mock
+**Mode:** live
 **Corpus:** 100 trading-sentiment prompts (30 bullish, 30 bearish, 20 neutral, 20 ambiguous)
-**Run duration:** 0.00s
-**Generated:** 2026-04-30T15:59:59.729Z
+**Run duration:** 514.13s
+**Generated:** 2026-04-30T16:18:02.862Z
 
 ## Headline
 
 | | Cost | Savings vs naive |
 |---|---:|---:|
-| Naive baseline (Sonnet always, no cache) | $0.068415 | — |
-| Cheap-only (Haiku always, no cache) | $0.018244 | 73.3% |
-| **Optimized (Haiku-first + escalation, cold cache)** | **$0.031975** | **53.3%** |
+| Naive baseline (Sonnet always, no cache) | $0.091515 | — |
+| Cheap-only (Haiku always, no cache) | $0.031044 | 66.1% |
+| **Optimized (Haiku-first + escalation, cold cache)** | **$0.052915** | **42.2%** |
 | Optimized + warm cache (second pass) | $0.000000 | 100.0% |
 
-**Cold cache, single pass:** 53.3% reduction vs Sonnet-always.
-**Two passes with warm cache:** 76.6% reduction vs running naive twice.
+**Cold cache, single pass:** 42.2% reduction vs Sonnet-always.
+**Two passes with warm cache:** 71.1% reduction vs running naive twice.
 
 ## Routing behavior
 
-- Escalations (Haiku low-confidence -> Sonnet): **20 / 100** (20.0%)
+- Escalations (Haiku low-confidence -> Sonnet): **24 / 100** (24.0%)
 - Classification accuracy on **decidable** prompts (80 non-ambiguous):
-  - Naive Sonnet: 100.0%
-  - Cheap-only Haiku: 100.0%
-  - Optimized: 100.0%
+  - Naive Sonnet: 92.5%
+  - Cheap-only Haiku: 93.8%
+  - Optimized: 92.5%
 
-> Mock mode constructs responses to match the expected label, so accuracy ~100% in mock is uninformative. Run `--mode=live` to measure real classifier accuracy.
+> Accuracy above is real (live API). Sample size is 80 decidable prompts; treat small differences between scenarios as noise.
 
 ## Token totals
 
 | Scenario | Input tokens | Output tokens |
 |---|---:|---:|
-| Naive baseline | 9,805 | 2,600 |
-| Cheap-only | 9,805 | 2,600 |
-| Optimized | 11,782 | 3,120 |
+| Naive baseline | 6,400 | 4,821 |
+| Cheap-only | 6,300 | 6,501 |
+| Optimized | 7,845 | 7,697 |
 
 ## Methodology
 
@@ -46,8 +46,8 @@
 ## Reproducing
 
 ```bash
-npm run bench                  # mock mode (this run)
-npm run bench -- --mode=live   # live mode, requires ANTHROPIC_API_KEY
+npm run bench                  # mock mode
+npm run bench -- --mode=live   # live mode (this run), requires ANTHROPIC_API_KEY
 ```
 
 Live mode hits the real Anthropic API and counts real tokens. Mock mode uses

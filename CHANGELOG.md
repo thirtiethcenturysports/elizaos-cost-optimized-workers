@@ -16,6 +16,8 @@ Initial release.
 - Architecture, cost-optimization, and audit-log docs (`docs/`)
 - 16 unit tests covering cache key hashing, sentiment parsing, and cost computation
 
+### Verified
+- Live-mode benchmark run on 2026-04-30 against the real Anthropic API. Headline numbers updated from mock estimates (53% / 77%) to verified live measurements (42% / 71%). Live mode also produced real classification accuracy: Naive Sonnet 92.5%, Cheap-only Haiku 93.8%, Optimized 92.5%.
+
 ### Known limitations
 - Cache stats counter and audit-log tail pointer use read-modify-write on KV; safe under the demo's single-writer-per-task pattern, not safe for concurrent writers (documented inline)
-- Headline 53.3% / 76.6% savings are mock-mode numbers; live-mode verification not yet committed

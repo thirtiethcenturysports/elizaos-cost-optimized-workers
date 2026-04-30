@@ -1,6 +1,6 @@
 # Cost Optimization
 
-This Worker uses two levers to reduce LLM cost: confidence-based model downgrade and KV response caching. Measured savings on the included 100-prompt corpus: **53% cold cache, 77% with warm cache** vs naive Sonnet-always.
+This Worker uses two levers to reduce LLM cost: confidence-based model downgrade and KV response caching. Measured savings on the included 100-prompt corpus, verified live against the Anthropic API: **42% cold cache, 71% with warm cache** vs naive Sonnet-always.
 
 ## Lever 1: Confidence-based model downgrade
 
@@ -53,14 +53,14 @@ A workload of mostly-unique prompts gets the routing benefit (53%) but minimal c
 
 ## Measurement
 
-| Scenario | Cost / 100 prompts | Notes |
-|---|---:|---|
-| Naive (Sonnet always, no cache) | $0.068 | Baseline |
-| Cheap-only (Haiku always) | $0.018 | Lower bound, but accuracy degrades on ambiguous inputs |
-| Optimized (Haiku-first + escalate) | $0.032 | Recommended default |
-| Optimized + warm cache (2nd pass) | $0.000 | Repeats cost nothing |
+| Scenario | Cost / 100 prompts | Accuracy | Notes |
+|---|---:|---:|---|
+| Naive (Sonnet always, no cache) | $0.0915 | 92.5% | Baseline |
+| Cheap-only (Haiku always) | $0.0310 | 93.8% | Lower bound on cost; on this corpus Haiku tied or beat Sonnet on accuracy |
+| Optimized (Haiku-first + escalate) | $0.0529 | 92.5% | Recommended default; escalation acts as a safety net |
+| Optimized + warm cache (2nd pass) | $0.0000 | — | Repeats cost nothing |
 
-Numbers are mock-mode (deterministic, free, reproducible). See [bench/results.md](../bench/results.md) for the full report and [bench/run.ts](../bench/run.ts) for the methodology.
+Numbers above are from live-mode benchmark against the real Anthropic API on 2026-04-30. Re-run with `npm run bench -- --mode=live` to verify on your own corpus. See [bench/results.md](../bench/results.md) for the full report and [bench/run.ts](../bench/run.ts) for the methodology.
 
 ## Why these and not other levers
 

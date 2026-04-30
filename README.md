@@ -22,16 +22,20 @@ One Worker, one route, one ElizaOS Action. Reproducible benchmark included.
 
 ## Headline number
 
-| Scenario | Cost / 100 prompts | Savings vs naive |
-|---|---:|---:|
-| Naive (Sonnet only, no cache) | $0.068 | — |
-| Cheap-only (Haiku only) | $0.018 | 73% |
-| **Optimized (Haiku-first + escalation)** | **$0.032** | **53%** |
-| Optimized + warm cache (2nd pass) | $0.000 | 100% |
+Verified against the real Anthropic API on 2026-04-30:
 
-**53% cost reduction**, single pass, cold cache, Haiku-first routing with 20% escalation rate to Sonnet. **76.6% reduction** over two passes once the cache warms.
+| Scenario | Cost / 100 prompts | Savings vs naive | Accuracy |
+|---|---:|---:|---:|
+| Naive (Sonnet only, no cache) | $0.0915 | — | 92.5% |
+| Cheap-only (Haiku only) | $0.0310 | 66.1% | 93.8% |
+| **Optimized (Haiku-first + escalation)** | **$0.0529** | **42.2%** | 92.5% |
+| Optimized + warm cache (2nd pass) | $0.0000 | 100% | — |
 
-Numbers above come from running the included 100-prompt trading-sentiment corpus in `--mode=mock` (deterministic, free). Run `--mode=live` with your Anthropic key to verify against the real API. Full methodology in [bench/results.md](./bench/results.md).
+**42% cost reduction**, single pass, cold cache, Haiku-first routing with 24% escalation rate to Sonnet. **71% reduction** over two passes once the cache warms.
+
+Accuracy measured on 80 decidable prompts (20 ambiguous prompts excluded). On this specific corpus Haiku slightly outperformed Sonnet — sample size is small, but the practical takeaway is that Haiku alone is competitive for trading-sentiment classification and the escalation tier exists primarily as a safety net for low-confidence outputs.
+
+Numbers above are from `--mode=live`. Run `npm run bench -- --mode=mock` for a free deterministic reproducer. Full methodology and per-prompt token counts in [bench/results.md](./bench/results.md).
 
 ## Install
 
@@ -161,7 +165,7 @@ Self-reported confidence is not perfect, but combined with hard schema validatio
 
 ## Roadmap
 
-- [ ] Live-mode benchmark numbers committed alongside mock-mode (pending real API run)
+- [x] Live-mode benchmark numbers committed (verified 2026-04-30 against real Anthropic API)
 - [ ] Task decomposition example (split classify + summarize into separate model calls)
 - [ ] Batching example (group N classifications into one Sonnet call when latency permits)
 - [ ] Cloudflare Queue-based pub/sub for multi-Worker fan-out
