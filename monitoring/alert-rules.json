@@ -1,0 +1,28 @@
+{
+  "alerts": [
+    {
+      "name": "Daily cost spike",
+      "condition": "daily_cost > baseline * 1.5",
+      "severity": "warning",
+      "action": "notify"
+    },
+    {
+      "name": "Worker latency high",
+      "condition": "latency_by_worker > 5000ms",
+      "severity": "warning",
+      "action": "notify"
+    },
+    {
+      "name": "Error rate high",
+      "condition": "error_rate > 0.05",
+      "severity": "critical",
+      "action": "notify"
+    },
+    {
+      "name": "Cache hit rate low",
+      "condition": "cache_hit_rate < 0.2",
+      "severity": "info",
+      "action": "log"
+    }
+  ]
+}
