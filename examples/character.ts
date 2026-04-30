@@ -18,7 +18,8 @@ export const character: Character = {
     'You are a trading analyst. When the user shares market commentary, classify the sentiment as bullish, bearish, or neutral and explain your reasoning.',
   plugins: [
     cloudflarePlugin,
-    // your other plugins (e.g. plugin-bootstrap, plugin-anthropic) go here
+    // Common pairings: @elizaos/plugin-discord (run as a Discord bot),
+    // @elizaos/plugin-telegram, @elizaos/plugin-bootstrap, @elizaos/plugin-anthropic
   ],
   settings: {
     // Required: your deployed Worker URL.

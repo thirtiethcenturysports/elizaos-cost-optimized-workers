@@ -2,6 +2,19 @@
 
 All notable changes to this project follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-04-30
+
+Patch release fixing two issues caught by the post-rename audit.
+
+### Fixed
+- `VERIFY_DECISION_LOG` action used a loose regex (`/[a-f0-9-]{8,}/i`) that false-matched hex-only English words like "feedback", "decade", "facade". Tightened to a strict UUID v4 shape with word-boundary anchors. Added regression tests in `src/plugin.test.ts`.
+- `worker/audit-log.ts` source comment still claimed "tamper-evident chain" — replaced with honest framing pointing to `docs/append-only-logging.md` threat model. Source comments are GitHub-visible and the previous wording contradicted the public docs.
+
+### Polish
+- `examples/character.ts` plugin comment now matches README (mentions plugin-discord, plugin-telegram, etc.).
+
+Test count: 22 passing (was 16; added 6 UUID regex tests).
+
 ## [0.2.0] - 2026-04-30
 
 Reframe and rename. The package was previously published as `@thirtieth/elizaos-plugin-cf-cost-router` and the repo as `elizaos-cost-optimized-workers`. v0.2 repositions as the canonical Cloudflare integration for ElizaOS rather than a single-purpose cost router.

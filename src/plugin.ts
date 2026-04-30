@@ -52,6 +52,10 @@ interface VerifyResponse {
 
 const DEFAULT_URL = 'http://localhost:8787';
 
+// Strict UUID v4-ish shape. Anchored on word boundaries so we don't false-match
+// hex-only English words like "feedback" or "decade" that happen to be 8+ chars.
+export const UUID_RE = /\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b/i;
+
 function getWorkerUrl(runtime: IAgentRuntime): string {
   const newKey = runtime.getSetting('CLOUDFLARE_WORKER_URL');
   if (typeof newKey === 'string' && newKey.length > 0) return newKey;
@@ -161,7 +165,7 @@ const verifyDecisionLog: Action = {
 
   validate: async (_runtime: IAgentRuntime, message: Memory): Promise<boolean> => {
     const text = message.content?.text;
-    return typeof text === 'string' && /[a-f0-9-]{8,}/i.test(text);
+    return typeof text === 'string' && UUID_RE.test(text);
   },
 
   handler: async (
@@ -172,9 +176,9 @@ const verifyDecisionLog: Action = {
     callback?: HandlerCallback
   ): Promise<ActionResult> => {
     const text = message.content?.text ?? '';
-    const match = text.match(/[a-f0-9][a-f0-9-]{7,}/i);
+    const match = text.match(UUID_RE);
     if (!match) {
-      return { success: false, error: 'no task_id found in message' };
+      return { success: false, error: 'no task_id (UUID) found in message' };
     }
     const task_id = match[0];
 

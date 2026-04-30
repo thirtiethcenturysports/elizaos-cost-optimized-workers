@@ -1,6 +1,6 @@
 {
   "name": "@thirtieth/elizaos-plugin-cloudflare",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Cloudflare integration for ElizaOS agents. Run agents behind a Cloudflare Worker with KV-backed response cache, replayable decision log, and an experimental cost-aware model router.",
   "type": "module",
   "main": "dist/plugin.js",

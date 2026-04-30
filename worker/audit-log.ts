@@ -1,6 +1,9 @@
-// Append-only audit log over KV.
-// Each entry stores prev_hash + entry_hash, forming a tamper-evident chain
-// per task. Replay reads entries by task_id prefix in order.
+// Replayable per-task decision log over KV.
+// Each entry stores prev_hash + entry_hash, forming a hash chain that lets a
+// holder of a known-good copy detect changes against the live KV state.
+// This is NOT tamper-resistant on its own; an actor with KV write access can
+// recompute the chain top-down. See docs/append-only-logging.md for the full
+// threat model. Replay reads entries by task_id prefix in order.
 
 import { sha256Hex } from './cache';
 
