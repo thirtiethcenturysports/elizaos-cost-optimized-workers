@@ -1,0 +1,66 @@
+{
+  "name": "@thirtieth/elizaos-plugin-cf-cost-router",
+  "version": "0.1.0",
+  "description": "ElizaOS plugin that routes LLM calls through a Cloudflare Worker with confidence-based model downgrade, KV caching, and append-only audit log",
+  "type": "module",
+  "main": "dist/plugin.js",
+  "module": "dist/plugin.js",
+  "types": "dist/plugin.d.ts",
+  "keywords": [
+    "elizaos-plugin",
+    "elizaos",
+    "cloudflare-workers",
+    "anthropic",
+    "cost-optimization",
+    "llm",
+    "ai-agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thirtiethcenturysports/elizaos-cost-optimized-workers.git"
+  },
+  "license": "MIT",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/plugin.d.ts",
+        "default": "./dist/plugin.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "worker",
+    "wrangler.toml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "dev:worker": "wrangler dev",
+    "deploy:worker": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "bench": "tsx bench/run.ts"
+  },
+  "peerDependencies": {
+    "@elizaos/core": "^1.7.2"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260101.0",
+    "@elizaos/core": "1.7.2",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.8",
+    "wrangler": "^3.95.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

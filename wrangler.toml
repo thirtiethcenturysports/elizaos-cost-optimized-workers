@@ -1,0 +1,29 @@
+name = "elizaos-cost-router"
+main = "worker/index.ts"
+compatibility_date = "2026-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+# KV namespace for response cache + audit log
+# Run: npx wrangler kv:namespace create "ROUTER_KV"
+# Then paste the returned id below
+[[kv_namespaces]]
+binding = "ROUTER_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Vars (non-secret config)
+[vars]
+CACHE_TTL_SECONDS = "3600"
+CACHE_MAX_ENTRIES = "1000"
+CONFIDENCE_THRESHOLD = "0.75"
+CHEAP_MODEL = "claude-haiku-4-5"
+EXPENSIVE_MODEL = "claude-sonnet-4-6"
+
+# Secrets (set via: npx wrangler secret put ANTHROPIC_API_KEY)
+# ANTHROPIC_API_KEY
+
+# Observability
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
