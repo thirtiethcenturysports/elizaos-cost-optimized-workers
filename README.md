@@ -1,41 +1,184 @@
-# elizaos Cost-Optimized Workers
+# @thirtieth/elizaos-plugin-cf-cost-router
 
-Orchestrate 17 Cloudflare Workers with append-only audit trails and real-time cost optimization.
+Drop-in [ElizaOS](https://elizaos.com) plugin that routes LLM calls through a Cloudflare Worker with confidence-based model downgrade, KV response caching, and an append-only audit log.
 
-## Value Prop
+> Built for the ElizaOS framework. Not affiliated with the ElizaOS team.
 
-Task decomposition + batching + caching + model selection = 82% LLM cost reduction. No black boxes. Every decision traceable. Every failure recoverable.
+## What this is
 
-## Key Patterns
+A working ElizaOS plugin + Cloudflare Worker that demonstrates one specific cost-optimization pattern end to end:
 
-- **Task Decomposition**: Break complex requests into subtasks. Route each to the cheapest appropriate model.
-- **Batching**: Accumulate requests and process in bulk to reduce API calls.
-- **Response Caching**: Cache common queries to avoid redundant model calls.
-- **Model Downgrade**: Use cheaper models for simple tasks. Reserve expensive models for complex reasoning.
-- **Append-Only Logging**: Every decision logged. Survive crashes. Replay on failure.
+- **Router:** call Claude Haiku first, escalate to Sonnet only when Haiku output is low-confidence or schema-invalid
+- **Cache:** KV-backed, content-hashed, TTL-bounded
+- **Audit log:** append-only, chain-hashed, replay + integrity verification
 
-## Getting Started
+One Worker, one route, one ElizaOS Action. Reproducible benchmark included.
 
-1. Clone this repo
-2. Review `docs/` for architecture patterns
-3. Review `examples/` for working implementations
-4. Deploy to Cloudflare Workers
-5. Monitor via dashboard config in `monitoring/`
+## What this isn't
 
-## Cost Impact
+- Not a framework. It's one plugin and one Worker.
+- Not a marketing claim about other people's stacks. The headline number below is measured against this repo's specific corpus and methodology, not extrapolated.
+- Not finished. See [Roadmap](#roadmap).
 
-- Baseline: $X.XX/day
-- Optimized: $Y.YY/day
-- Savings: 82%
+## Headline number
+
+| Scenario | Cost / 100 prompts | Savings vs naive |
+|---|---:|---:|
+| Naive (Sonnet only, no cache) | $0.068 | — |
+| Cheap-only (Haiku only) | $0.018 | 73% |
+| **Optimized (Haiku-first + escalation)** | **$0.032** | **53%** |
+| Optimized + warm cache (2nd pass) | $0.000 | 100% |
+
+**53% cost reduction**, single pass, cold cache, Haiku-first routing with 20% escalation rate to Sonnet. **77% reduction** over two passes once the cache warms.
+
+Numbers above come from running the included 100-prompt trading-sentiment corpus in `--mode=mock` (deterministic, free). Run `--mode=live` with your Anthropic key to verify against the real API. Full methodology in [bench/results.md](./bench/results.md).
+
+## Install
+
+```bash
+npm install @thirtieth/elizaos-plugin-cf-cost-router
+```
+
+Peer dependency: `@elizaos/core ^1.7.2`.
+
+## Quickstart (3 minutes)
+
+### 1. Deploy the Worker
+
+```bash
+git clone https://github.com/thirtiethcenturysports/elizaos-cost-optimized-workers.git
+cd elizaos-cost-optimized-workers
+npm install
+cp .dev.vars.example .dev.vars   # add your ANTHROPIC_API_KEY
+npx wrangler kv:namespace create "ROUTER_KV"
+# Paste the returned id into wrangler.toml
+npx wrangler secret put ANTHROPIC_API_KEY
+npx wrangler deploy
+```
+
+You'll get a URL like `https://elizaos-cost-router.<your-subdomain>.workers.dev`.
+
+### 2. Wire the plugin into your ElizaOS character
+
+```ts
+import costRouter from '@thirtieth/elizaos-plugin-cf-cost-router';
+import type { Character } from '@elizaos/core';
+
+export const character: Character = {
+  name: 'YourAgent',
+  plugins: [costRouter],
+  settings: {
+    COST_ROUTER_URL: 'https://elizaos-cost-router.<your-subdomain>.workers.dev',
+  },
+};
+```
+
+### 3. Use the action
+
+The plugin registers `CLASSIFY_TRADING_SENTIMENT`. Any message your agent decides to classify gets routed through the Worker. Result returns sentiment, confidence, which model handled it, whether it was cached, and the cost in USD.
 
 ## Architecture
 
-17 Cloudflare Workers connected via shared event bus. Each Worker handles a specific task (sentiment analysis, response generation, signal processing, etc.). Central orchestrator routes tasks based on cost/latency heuristics. All decisions logged append-only for audit and replay.
+```
+ElizaOS Agent
+     |
+     v  (Action.handler -> fetch)
++---------------------------------+
+| Cloudflare Worker               |
+|  POST /classify                 |
+|   1. cache.get()  -> hit? return|
+|   2. router.route()             |
+|      a. callModel(Haiku)        |
+|      b. parse & validate JSON   |
+|      c. confidence >= 0.75?     |
+|         yes -> return Haiku     |
+|         no  -> callModel(Sonnet)|
+|   3. cache.put()                |
+|   4. auditLog.append()          |
++---------------------------------+
+     |
+     v
+Cloudflare KV (ROUTER_KV binding)
+   - cache:<sha256>          (TTL'd response cache)
+   - audit:entry:<task>:<seq> (append-only log)
+   - audit:tail:<task>        (pointer to latest)
+   - cache:stats              (hit/miss counters)
+```
 
-## Monitoring
+## Routes
 
-Dashboard config included in `monitoring/`. Alert rules trigger on cost anomalies, latency spikes, and failure rates.
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/classify` | Classify trading sentiment via the router |
+| `GET` | `/audit/:taskId` | Replay all log entries for a task in order |
+| `GET` | `/audit/:taskId/verify` | Validate the chain hash for a task's log |
+| `GET` | `/stats` | Cumulative cache hit/miss counters |
+| `GET` | `/health` | Liveness check |
+
+## Configuration
+
+| `wrangler.toml` var | Default | Notes |
+|---|---|---|
+| `CACHE_TTL_SECONDS` | `3600` | KV `expirationTtl` for cached responses |
+| `CONFIDENCE_THRESHOLD` | `0.75` | Below this, Haiku output triggers Sonnet escalation |
+| `CHEAP_MODEL` | `claude-haiku-4-5` | First-try model |
+| `EXPENSIVE_MODEL` | `claude-sonnet-4-6` | Escalation target |
+
+Secrets (set via `wrangler secret put`):
+
+| Name | Notes |
+|---|---|
+| `ANTHROPIC_API_KEY` | Required |
+
+## Reproducing the benchmark
+
+```bash
+npm run bench                  # mock mode (free, deterministic)
+npm run bench -- --mode=live   # live mode, requires ANTHROPIC_API_KEY (~$0.50 per run)
+```
+
+Mock mode uses Anthropic's published rates against character-count token estimates with deterministic mock responses. **Mock numbers are a model, not a measurement** — useful for reproducibility, but verify with `--mode=live` before publishing claims.
+
+## How escalation works
+
+Haiku is asked to return strict JSON: `{ sentiment, confidence, reasoning }`. The router escalates to Sonnet if any of these are true:
+
+1. Haiku's response fails to parse as JSON
+2. The parsed object fails schema validation (sentiment not in enum, confidence out of range, reasoning missing)
+3. Haiku reports `confidence < CONFIDENCE_THRESHOLD`
+
+Self-reported confidence is not perfect, but combined with hard schema validation it's a reasonable demo signal. Logprob-based escalation would be stronger if Anthropic exposed logprobs.
+
+## Caveats
+
+- **One pattern, not five.** This repo demonstrates Haiku-first routing + KV cache + audit log. It does not implement task decomposition, batching, or model fan-out. Those are real patterns but not in scope here.
+- **Self-reported confidence has limits.** A model can be confidently wrong. The escalation path catches schema failures too, which helps but doesn't eliminate the issue.
+- **KV is eventually consistent.** Cache reads can return stale entries within seconds of a write across regions. Acceptable for sentiment classification, may not be for other workloads.
+- **Cache hit rate depends on your traffic.** Repeated identical prompts cache perfectly. Unique prompts get zero cache benefit (only routing benefit).
+
+## Roadmap
+
+- [ ] Live-mode benchmark numbers committed alongside mock-mode (pending real API run)
+- [ ] Task decomposition example (split classify + summarize into separate model calls)
+- [ ] Batching example (group N classifications into one Sonnet call when latency permits)
+- [ ] Cloudflare Queue-based pub/sub for multi-Worker fan-out
+- [ ] CHANGELOG + semver discipline once npm-published
+
+## Repo layout
+
+```
+src/plugin.ts              ElizaOS Plugin export, npm entry point
+worker/index.ts            Cloudflare Worker entry
+worker/router.ts           Haiku-first routing + cost math
+worker/cache.ts            KV cache + content-hash keys
+worker/audit-log.ts        Append-only KV log with chain hash
+worker/*.test.ts           Unit tests (vitest)
+bench/corpus.ts            100-prompt trading-sentiment corpus
+bench/run.ts               Benchmark runner, mock + live modes
+bench/results.md           Latest measured output
+docs/                      Architecture, routing, audit log details
+```
 
 ## License
 
-MIT
+MIT. See [LICENSE](./LICENSE).
