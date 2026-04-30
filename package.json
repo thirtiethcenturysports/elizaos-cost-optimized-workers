@@ -1,7 +1,7 @@
 {
-  "name": "@thirtieth/elizaos-plugin-cf-cost-router",
-  "version": "0.1.0",
-  "description": "ElizaOS plugin that routes LLM calls through a Cloudflare Worker with confidence-based model downgrade, KV caching, and append-only audit log",
+  "name": "@thirtieth/elizaos-plugin-cloudflare",
+  "version": "0.2.0",
+  "description": "Cloudflare integration for ElizaOS agents. Run agents behind a Cloudflare Worker with KV-backed response cache, replayable decision log, and an experimental cost-aware model router.",
   "type": "module",
   "main": "dist/plugin.js",
   "module": "dist/plugin.js",
@@ -10,14 +10,16 @@
     "elizaos-plugin",
     "elizaos",
     "cloudflare-workers",
+    "cloudflare-kv",
     "anthropic",
-    "cost-optimization",
-    "llm",
-    "ai-agent"
+    "llm-cache",
+    "decision-log",
+    "ai-agent",
+    "cost-optimization"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/thirtiethcenturysports/elizaos-cost-optimized-workers.git"
+    "url": "git+https://github.com/thirtiethcenturysports/elizaos-plugin-cloudflare.git"
   },
   "license": "MIT",
   "exports": {

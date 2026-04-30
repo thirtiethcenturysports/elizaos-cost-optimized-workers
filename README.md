@@ -1,133 +1,93 @@
-# @thirtieth/elizaos-plugin-cf-cost-router
+# @thirtieth/elizaos-plugin-cloudflare
 
-Drop-in [ElizaOS](https://elizaos.com) plugin that routes LLM calls through a Cloudflare Worker with confidence-based model downgrade, KV response caching, and an append-only audit log.
+Cloudflare integration for [ElizaOS](https://elizaos.com) agents. Runs your agent's expensive paths behind a Cloudflare Worker with KV-backed response cache, replayable per-task decision log, and an experimental cost-aware model router.
 
 ```bash
-npm install @thirtieth/elizaos-plugin-cf-cost-router
+npm install @thirtieth/elizaos-plugin-cloudflare
 ```
 
-[![npm](https://img.shields.io/npm/v/@thirtieth/elizaos-plugin-cf-cost-router.svg)](https://www.npmjs.com/package/@thirtieth/elizaos-plugin-cf-cost-router)
-[![license](https://img.shields.io/npm/l/@thirtieth/elizaos-plugin-cf-cost-router.svg)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/@thirtieth/elizaos-plugin-cloudflare.svg)](https://www.npmjs.com/package/@thirtieth/elizaos-plugin-cloudflare)
+[![license](https://img.shields.io/npm/l/@thirtieth/elizaos-plugin-cloudflare.svg)](./LICENSE)
 
 > Built for the ElizaOS framework. Not affiliated with the ElizaOS team.
 
-## What this is
-
-A working ElizaOS plugin + Cloudflare Worker that demonstrates one specific cost-optimization pattern end to end:
-
-- **Router:** call Claude Haiku first, escalate to Sonnet only when Haiku output is low-confidence or schema-invalid
-- **Cache:** KV-backed, content-hashed, TTL-bounded
-- **Audit log:** append-only, chain-hashed, replay + integrity verification
-
-One Worker, one route, one ElizaOS Action. Reproducible benchmark included.
-
-## What this isn't
-
-- Not a framework. It's one plugin and one Worker.
-- Not a marketing claim about other people's stacks. The headline number below is measured against this repo's specific corpus and methodology, not extrapolated.
-- Not finished. See [Roadmap](#roadmap).
-
-## Headline number
-
-Verified against the real Anthropic API on 2026-04-30:
-
-| Scenario | Cost / 100 prompts | Savings vs naive | Accuracy |
-|---|---:|---:|---:|
-| Naive (Sonnet only, no cache) | $0.0915 | — | 92.5% |
-| Cheap-only (Haiku only) | $0.0310 | 66.1% | 93.8% |
-| **Optimized (Haiku-first + escalation)** | **$0.0529** | **42.2%** | 92.5% |
-| Optimized + warm cache (2nd pass) | $0.0000 | 100% | — |
-
-**42% cost reduction**, single pass, cold cache, Haiku-first routing with 24% escalation rate to Sonnet. **71% reduction** over two passes once the cache warms.
-
-Accuracy measured on 80 decidable prompts (20 ambiguous prompts excluded). On this specific corpus Haiku slightly outperformed Sonnet — sample size is small, but the practical takeaway is that Haiku alone is competitive for trading-sentiment classification and the escalation tier exists primarily as a safety net for low-confidence outputs.
-
-Numbers above are from `--mode=live`. Run `npm run bench -- --mode=mock` for a free deterministic reproducer. Full methodology and per-prompt token counts in [bench/results.md](./bench/results.md).
-
-## Install
+## Deploy ElizaOS to Cloudflare in ~10 minutes
 
 ```bash
-npm install @thirtieth/elizaos-plugin-cf-cost-router
-```
-
-Peer dependency: `@elizaos/core ^1.7.2`.
-
-## Quickstart
-
-You need a Cloudflare account and an Anthropic API key. First-time setup runs about 10 minutes (mostly waiting on `wrangler login` and the first deploy).
-
-### 1. Deploy the Worker
-
-```bash
-git clone https://github.com/thirtiethcenturysports/elizaos-cost-optimized-workers.git
-cd elizaos-cost-optimized-workers
+git clone https://github.com/thirtiethcenturysports/elizaos-plugin-cloudflare.git
+cd elizaos-plugin-cloudflare
 npm install
-cp .dev.vars.example .dev.vars     # paste your ANTHROPIC_API_KEY here for `wrangler dev`
-npx wrangler login                 # if not already logged in
+cp .dev.vars.example .dev.vars                       # paste your ANTHROPIC_API_KEY here
+npx wrangler login
 npx wrangler kv namespace create ROUTER_KV
-# Copy the returned id into wrangler.toml, replacing REPLACE_WITH_KV_NAMESPACE_ID
-npx wrangler deploy                # first deploy provisions the Worker subdomain
-npx wrangler secret put ANTHROPIC_API_KEY   # interactive; secrets require an existing deployment
+# copy the returned id into wrangler.toml
+npx wrangler deploy
+npx wrangler secret put ANTHROPIC_API_KEY            # interactive, requires existing deployment
 ```
 
-You'll get a URL like `https://elizaos-cost-router.<your-subdomain>.workers.dev`. Check `/health` to confirm it's live.
-
-### 2. Wire the plugin into your ElizaOS character
+You'll get a URL like `https://elizaos-cloudflare.<your-subdomain>.workers.dev`. Hit `/health` to confirm it's live, then wire it into your ElizaOS character:
 
 ```ts
-import costRouter from '@thirtieth/elizaos-plugin-cf-cost-router';
+import cloudflarePlugin from '@thirtieth/elizaos-plugin-cloudflare';
 import type { Character } from '@elizaos/core';
 
 export const character: Character = {
   name: 'YourAgent',
-  plugins: [costRouter],
+  plugins: [cloudflarePlugin],
   settings: {
-    COST_ROUTER_URL: 'https://elizaos-cost-router.<your-subdomain>.workers.dev',
+    CLOUDFLARE_WORKER_URL: 'https://elizaos-cloudflare.<your-subdomain>.workers.dev',
   },
 };
 ```
 
-### 3. Use the action
+A working example character is in [examples/character.ts](./examples/character.ts).
 
-The plugin registers `CLASSIFY_TRADING_SENTIMENT`. Any message your agent decides to classify gets routed through the Worker. Result returns sentiment, confidence, which model handled it, whether it was cached, and the cost in USD.
+## Three features
 
-## Architecture
+### 1. KV-backed response cache
 
-```
-ElizaOS Agent
-     |
-     v  (Action.handler -> fetch)
-+---------------------------------+
-| Cloudflare Worker               |
-|  POST /classify                 |
-|   1. cache.get()  -> hit? return|
-|   2. router.route()             |
-|      a. callModel(Haiku)        |
-|      b. parse & validate JSON   |
-|      c. confidence >= 0.75?     |
-|         yes -> return Haiku     |
-|         no  -> callModel(Sonnet)|
-|   3. cache.put()                |
-|   4. auditLog.append()          |
-+---------------------------------+
-     |
-     v
-Cloudflare KV (ROUTER_KV binding)
-   - cache:<sha256>          (TTL'd response cache)
-   - audit:entry:<task>:<seq> (append-only log)
-   - audit:tail:<task>        (pointer to latest)
-   - cache:stats              (hit/miss counters)
-```
+Stable. Repeated identical prompts skip the model call entirely. Content-hash keys (sha256 over normalized model+input), TTL eviction via KV's `expirationTtl`. See [docs/cost-optimization.md](./docs/cost-optimization.md).
+
+### 2. Replayable per-task decision log
+
+Stable. Every classification produces a chain-hashed log entry stored in KV. Replay all entries for a task in order via `GET /audit/:taskId`, integrity-check the chain via `GET /audit/:taskId/verify`. The plugin exposes a `VERIFY_DECISION_LOG` Action so an agent can self-check.
+
+**Honest scope:** the chain detects accidental corruption and outsider tampering of a *copy* of the log against a known-good reference. It does NOT prevent insider tampering of the live KV — anyone with KV write access can recompute the chain top-down. For real tamper-resistance you need an external witness anchor (signed roots, periodic publication to write-once storage, TEE attestation). This plugin is appropriate for debugging, replay, and integrity checks against a backup; it is not appropriate as a sole compliance control. Full caveats in [docs/append-only-logging.md](./docs/append-only-logging.md).
+
+### 3. Cost-aware model router (experimental)
+
+Marked experimental. Calls Claude Haiku first, escalates to Sonnet on low-confidence or schema-invalid output. **Honest aggregate cost accounting** — when escalation fires, the wasted Haiku call is included in the reported cost. Most cascade demos hide this; the bench in this repo doesn't.
+
+Verified live against the Anthropic API on 2026-04-30:
+
+| Scenario | Cost / 100 prompts | Accuracy |
+|---|---:|---:|
+| Naive (Sonnet only) | $0.0915 | 92.5% |
+| Cheap-only (Haiku only) | $0.0310 | **93.8%** |
+| Optimized (Haiku-first + escalate) | $0.0529 | 92.5% |
+
+**On this corpus, Haiku alone beat the optimized router on both cost and accuracy.** That's why the router ships marked experimental: cascade routing is workload-dependent, and on forgiving classification tasks the cheap model is good enough that the escalation tier costs more than it saves. Run the included benchmark on your own corpus before relying on it.
+
+The escalation tier is genuinely useful when the cheap model's failure mode is loud (malformed JSON, refusals, hallucinated values that fail schema validation). It's not a silver bullet for cost.
+
+Full methodology in [bench/results.md](./bench/results.md).
 
 ## Routes
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/classify` | Classify trading sentiment via the router |
+| `POST` | `/classify` | Run input through cache → router → log |
 | `GET` | `/audit/:taskId` | Replay all log entries for a task in order |
-| `GET` | `/audit/:taskId/verify` | Validate the chain hash for a task's log |
+| `GET` | `/audit/:taskId/verify` | Integrity-check the chain against current KV state |
 | `GET` | `/stats` | Cumulative cache hit/miss counters |
 | `GET` | `/health` | Liveness check |
+
+## Plugin Actions
+
+| Action | Description |
+|---|---|
+| `CLASSIFY_TRADING_SENTIMENT` | Classify sentiment via the cache + router pipeline |
+| `VERIFY_DECISION_LOG` | Verify chain integrity for a given task_id |
 
 ## Configuration
 
@@ -138,11 +98,18 @@ Cloudflare KV (ROUTER_KV binding)
 | `CHEAP_MODEL` | `claude-haiku-4-5` | First-try model |
 | `EXPENSIVE_MODEL` | `claude-sonnet-4-6` | Escalation target |
 
-Secrets (set via `wrangler secret put`):
+Secrets:
 
 | Name | Notes |
 |---|---|
 | `ANTHROPIC_API_KEY` | Required |
+
+Plugin settings (in your ElizaOS character config):
+
+| Setting | Notes |
+|---|---|
+| `CLOUDFLARE_WORKER_URL` | Required. Your deployed Worker URL. |
+| `COST_ROUTER_URL` | Backwards-compat alias for `CLOUDFLARE_WORKER_URL` from v0.1 |
 
 ## Reproducing the benchmark
 
@@ -151,46 +118,37 @@ npm run bench                  # mock mode (free, deterministic)
 npm run bench -- --mode=live   # live mode, requires ANTHROPIC_API_KEY (~$0.50 per run)
 ```
 
-Mock mode uses Anthropic's published rates against character-count token estimates with deterministic mock responses. **Mock numbers are a model, not a measurement** — useful for reproducibility, but verify with `--mode=live` before publishing claims.
+## What this isn't
 
-## How escalation works
-
-Haiku is asked to return strict JSON: `{ sentiment, confidence, reasoning }`. The router escalates to Sonnet if any of these are true:
-
-1. Haiku's response fails to parse as JSON
-2. The parsed object fails schema validation (sentiment not in enum, confidence out of range, reasoning missing)
-3. Haiku reports `confidence < CONFIDENCE_THRESHOLD`
-
-Self-reported confidence is not perfect, but combined with hard schema validation it's a reasonable demo signal. Logprob-based escalation would be stronger if Anthropic exposed logprobs.
-
-## Caveats
-
-- **One pattern, not five.** This repo demonstrates Haiku-first routing + KV cache + audit log. It does not implement task decomposition, batching, or model fan-out. Those are real patterns but not in scope here.
-- **Self-reported confidence has limits.** A model can be confidently wrong. The escalation path catches schema failures too, which helps but doesn't eliminate the issue.
-- **KV is eventually consistent.** Cache reads can return stale entries within seconds of a write across regions. Acceptable for sentiment classification, may not be for other workloads.
-- **Cache hit rate depends on your traffic.** Repeated identical prompts cache perfectly. Unique prompts get zero cache benefit (only routing benefit).
+- **Not a replacement for Langfuse / Helicone / LangSmith.** Those are full observability platforms with traces, evals, dashboards, replay UIs, and managed retention. This is a focused Worker-side primitive that complements them.
+- **Not a tamper-resistant audit log.** See the honest-scope note above. Use TEE attestation, signed roots, or write-once storage if you need real tamper-resistance.
+- **Not a generic LLM cache for any provider.** Wired to Anthropic. Other providers possible but not shipped.
+- **Not a fan-out orchestrator.** One Worker handles one classify call. No queues, no task decomposition, no multi-step planning.
 
 ## Roadmap
 
-- [x] Live-mode benchmark numbers committed (verified 2026-04-30 against real Anthropic API)
-- [ ] Task decomposition example (split classify + summarize into separate model calls)
-- [ ] Batching example (group N classifications into one Sonnet call when latency permits)
-- [ ] Cloudflare Queue-based pub/sub for multi-Worker fan-out
-- [ ] CHANGELOG + semver discipline once npm-published
+- [x] Live-mode benchmark verified against the real Anthropic API (2026-04-30)
+- [ ] D1 backend option for the decision log (KV + D1 dual-write for queryability)
+- [ ] Cloudflare Queue integration for async batch classification
+- [ ] OpenTelemetry / Langfuse exporter so chain-hashed events flow into existing observability stacks
+- [ ] Witness anchor option (periodic root publication to R2 or write-once storage) for stronger tamper claims
+- [ ] Multi-provider support (OpenAI, Workers AI as cheap tier)
+- [ ] Generic classification Action (not just trading sentiment)
 
 ## Repo layout
 
 ```
-src/plugin.ts              ElizaOS Plugin export, npm entry point
-worker/index.ts            Cloudflare Worker entry
-worker/router.ts           Haiku-first routing + cost math
-worker/cache.ts            KV cache + content-hash keys
-worker/audit-log.ts        Append-only KV log with chain hash
-worker/*.test.ts           Unit tests (vitest)
-bench/corpus.ts            100-prompt trading-sentiment corpus
-bench/run.ts               Benchmark runner, mock + live modes
-bench/results.md           Latest measured output
-docs/                      Architecture, routing, audit log details
+src/plugin.ts                 ElizaOS Plugin export, npm entry point
+worker/index.ts               Cloudflare Worker entry
+worker/router.ts              Haiku-first routing + cost math
+worker/cache.ts               KV cache + content-hash keys
+worker/audit-log.ts           Chain-hashed KV decision log
+worker/*.test.ts              Unit tests (vitest)
+bench/corpus.ts               100-prompt trading-sentiment corpus
+bench/run.ts                  Benchmark runner, mock + live modes
+bench/results.md              Latest measured output (live mode)
+docs/                         Architecture, cost optimization, decision log details
+examples/character.ts         Minimal ElizaOS character config
 ```
 
 ## License

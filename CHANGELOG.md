@@ -2,6 +2,32 @@
 
 All notable changes to this project follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-30
+
+Reframe and rename. The package was previously published as `@thirtieth/elizaos-plugin-cf-cost-router` and the repo as `elizaos-cost-optimized-workers`. v0.2 repositions as the canonical Cloudflare integration for ElizaOS rather than a single-purpose cost router.
+
+### Renamed
+- npm package: `@thirtieth/elizaos-plugin-cf-cost-router` → `@thirtieth/elizaos-plugin-cloudflare`. v0.1 npm package deprecated with a redirect notice.
+- GitHub repo: `elizaos-cost-optimized-workers` → `elizaos-plugin-cloudflare`. GitHub auto-redirects the old URL.
+- Default plugin export: `costRouterPlugin` → `cloudflarePlugin`. Old name kept as a backwards-compat alias.
+- Plugin setting: `COST_ROUTER_URL` → `CLOUDFLARE_WORKER_URL`. Old setting still accepted for v0.1 users.
+- Worker name in `wrangler.toml`: `elizaos-cost-router` → `elizaos-cloudflare`.
+
+### Added
+- New `VERIFY_DECISION_LOG` plugin Action that calls `/audit/:taskId/verify` so an agent can self-check chain integrity.
+- README "What this isn't" section explicitly naming what this primitive does NOT cover (replacement for Langfuse / Helicone, tamper-resistant audit log, fan-out orchestrator).
+- README "Three features" structure with stable / experimental labels.
+- Roadmap items for D1 backend, Cloudflare Queue integration, OpenTelemetry exporter, witness anchor for stronger tamper claims, multi-provider support.
+
+### Changed: honesty fixes
+- Decision log framing demoted from "tamper-evident audit log" to "replayable per-task decision log with integrity check **against a known-good copy**." The previous framing was overstated: with no external witness anchor, anyone with KV write access can rewrite the chain top-down without detection. New `docs/append-only-logging.md` includes a full threat model section naming what's covered and what isn't.
+- Router framing demoted from "default cost optimization" to **experimental**. The 2026-04-30 live benchmark showed Haiku alone (no router) was both cheaper AND more accurate than the optimized router on the included corpus. README and `docs/cost-optimization.md` now lead with this finding rather than burying it.
+- Cost-optimization doc reframed: cache is the stable lever, router is the experimental lever, with explicit "when this pays off / when it doesn't" guidance.
+- Architecture doc updated for new naming and the new `VERIFY_DECISION_LOG` action.
+
+### Why this rename
+Three independent reviewers (Trend Researcher, Software Architect, Developer Advocate) converged on the same finding: the v0.1 framing led with the weakest piece (the router) while the strongest positioning is "canonical Cloudflare integration for ElizaOS." The rename doesn't add features (mostly); it makes the framing match what the data actually supports and gives the plugin room to grow into the broader Cloudflare integration story (D1, Queues, R2, Workers AI) without another rename.
+
 ## [0.1.0] - 2026-04-30
 
 Initial release.

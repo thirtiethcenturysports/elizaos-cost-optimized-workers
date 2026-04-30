@@ -24,7 +24,7 @@ interface ClassifyBody {
   task_id?: unknown;
 }
 
-const WORKER_ID = 'elizaos-cost-router';
+const WORKER_ID = 'elizaos-cloudflare';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

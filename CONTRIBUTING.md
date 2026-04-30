@@ -4,20 +4,20 @@ Thanks for considering a contribution. This is a small repo with a focused scope
 
 ## Scope
 
-This project demonstrates one ElizaOS plugin + one Cloudflare Worker doing confidence-based model downgrade with KV cache and append-only audit log. Patterns out of scope (for now):
+This project is the canonical Cloudflare integration for ElizaOS agents. It ships three subsystems on a single Worker: KV-backed response cache (stable), replayable per-task decision log with chain-hash integrity check (stable), and an experimental cost-aware model router. Patterns out of scope (for now):
 
 - Task decomposition orchestrators
-- Batched inference endpoints
-- Multi-Worker fan-out via Queues / Durable Objects
+- Batched inference endpoints (Cloudflare Queue integration is on the roadmap)
 - Non-classification action types
+- Witness-anchored tamper-resistance (on the roadmap; current decision log is honest about its limits)
 
 If you want any of those, the [Roadmap](./README.md#roadmap) is the right place to start a discussion.
 
 ## Local setup
 
 ```bash
-git clone https://github.com/thirtiethcenturysports/elizaos-cost-optimized-workers.git
-cd elizaos-cost-optimized-workers
+git clone https://github.com/thirtiethcenturysports/elizaos-plugin-cloudflare.git
+cd elizaos-plugin-cloudflare
 npm install
 cp .dev.vars.example .dev.vars   # add your ANTHROPIC_API_KEY
 npm run typecheck
@@ -42,4 +42,4 @@ For bugs, include:
 
 ## Honest measurement
 
-If you publish numbers based on this repo, run `--mode=live` first. Mock-mode numbers are reproducible but not measurements. Don't ship the mock-mode 53% as a real-world claim without verification.
+If you publish numbers based on this repo, run `--mode=live` first. Mock-mode numbers are reproducible but not measurements. The headline 42% / 71% in the README came from `--mode=live` against the real Anthropic API on 2026-04-30; do not modify that claim without re-running.

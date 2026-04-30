@@ -1,4 +1,4 @@
-name = "elizaos-cost-router"
+name = "elizaos-cloudflare"
 main = "worker/index.ts"
 compatibility_date = "2026-01-15"
 compatibility_flags = ["nodejs_compat"]

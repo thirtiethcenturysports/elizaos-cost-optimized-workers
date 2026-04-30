@@ -1,17 +1,23 @@
-// @thirtieth/elizaos-plugin-cf-cost-router
+// @thirtieth/elizaos-plugin-cloudflare
 //
-// ElizaOS plugin that routes LLM classification through a Cloudflare Worker
-// running cost-optimized model routing (Haiku-first, Sonnet on low confidence)
-// with KV response cache and append-only audit log.
+// Cloudflare integration for ElizaOS agents. The plugin exposes Actions that
+// route through a deployed Cloudflare Worker. The Worker handles:
+//
+//   - KV-backed response cache (sha256 content keys, TTL eviction)
+//   - Replayable per-task decision log (chain-hashed, integrity-checkable
+//     against a known-good copy; see docs/append-only-logging.md for limits)
+//   - Experimental cost-aware model router (Haiku-first with optional
+//     escalation to Sonnet; reproducible benchmark in bench/)
 //
 // Usage in an ElizaOS character config:
 //
-//   import costRouter from '@thirtieth/elizaos-plugin-cf-cost-router';
+//   import cloudflarePlugin from '@thirtieth/elizaos-plugin-cloudflare';
 //
 //   export const character: Character = {
-//     plugins: [costRouter],
+//     plugins: [cloudflarePlugin],
 //     settings: {
-//       COST_ROUTER_URL: 'https://elizaos-cost-router.<your-subdomain>.workers.dev',
+//       CLOUDFLARE_WORKER_URL: 'https://elizaos-cloudflare.<sub>.workers.dev',
+//       // Backwards-compatible alias also accepted: COST_ROUTER_URL
 //     },
 //   };
 
@@ -39,18 +45,27 @@ interface ClassifyResponse {
   latency_ms: number;
 }
 
+interface VerifyResponse {
+  valid: boolean;
+  broken_at?: number;
+}
+
 const DEFAULT_URL = 'http://localhost:8787';
 
-function getRouterUrl(runtime: IAgentRuntime): string {
-  const raw = runtime.getSetting('COST_ROUTER_URL');
-  return typeof raw === 'string' && raw.length > 0 ? raw : DEFAULT_URL;
+function getWorkerUrl(runtime: IAgentRuntime): string {
+  const newKey = runtime.getSetting('CLOUDFLARE_WORKER_URL');
+  if (typeof newKey === 'string' && newKey.length > 0) return newKey;
+  // Backwards compat with v0.1 setting name.
+  const oldKey = runtime.getSetting('COST_ROUTER_URL');
+  if (typeof oldKey === 'string' && oldKey.length > 0) return oldKey;
+  return DEFAULT_URL;
 }
 
 const classifyTradingSentiment: Action = {
   name: 'CLASSIFY_TRADING_SENTIMENT',
   similes: ['ANALYZE_SENTIMENT', 'SENTIMENT_CHECK', 'MARKET_MOOD'],
   description:
-    'Classify the sentiment of a trading-related message as bullish, bearish, or neutral via a cost-optimized Cloudflare Worker. Returns confidence, reasoning, and which model handled it.',
+    'Classify the sentiment of a trading-related message as bullish, bearish, or neutral via a Cloudflare Worker with response cache and decision log. Returns confidence, reasoning, model used, and cost telemetry.',
 
   validate: async (_runtime: IAgentRuntime, message: Memory): Promise<boolean> => {
     const text = message.content?.text;
@@ -69,7 +84,7 @@ const classifyTradingSentiment: Action = {
       return { success: false, error: 'no input text' };
     }
 
-    const url = `${getRouterUrl(runtime)}/classify`;
+    const url = `${getWorkerUrl(runtime)}/classify`;
     const task_id = `${message.id ?? crypto.randomUUID()}`;
 
     let response: Response;
@@ -81,14 +96,14 @@ const classifyTradingSentiment: Action = {
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      return { success: false, error: `cost-router fetch failed: ${msg}` };
+      return { success: false, error: `cloudflare worker fetch failed: ${msg}` };
     }
 
     if (!response.ok) {
       const body = await response.text();
       return {
         success: false,
-        error: `cost-router returned ${response.status}: ${body}`,
+        error: `cloudflare worker returned ${response.status}: ${body}`,
       };
     }
 
@@ -99,7 +114,7 @@ const classifyTradingSentiment: Action = {
       : `Sentiment: ${data.result.sentiment} (${data.model_used}${data.escalated ? ', escalated' : ''}, $${data.cost_usd.toFixed(6)})`;
 
     if (callback) {
-      await callback({ text: summary, source: 'cost-router' });
+      await callback({ text: summary, source: 'cloudflare-worker' });
     }
 
     return {
@@ -138,11 +153,89 @@ const classifyTradingSentiment: Action = {
   ],
 };
 
-export const costRouterPlugin: Plugin = {
-  name: 'cost-router',
+const verifyDecisionLog: Action = {
+  name: 'VERIFY_DECISION_LOG',
+  similes: ['CHECK_AUDIT_CHAIN', 'VERIFY_TASK_LOG', 'AUDIT_INTEGRITY_CHECK'],
   description:
-    'Routes LLM classification through a cost-optimized Cloudflare Worker (Haiku-first, Sonnet on low confidence) with KV cache and append-only audit log.',
-  actions: [classifyTradingSentiment],
+    'Verify the integrity of the chain-hashed decision log for a given task_id. Returns valid=true if the chain reads as expected against the live KV store, or broken_at=<seq> if a hash mismatch is detected. Note: this checks integrity against the current KV state, which an actor with KV write access could rewrite top-down. Useful for detecting accidental corruption and outsider tampering of a copy, not for proving insider tamper-resistance.',
+
+  validate: async (_runtime: IAgentRuntime, message: Memory): Promise<boolean> => {
+    const text = message.content?.text;
+    return typeof text === 'string' && /[a-f0-9-]{8,}/i.test(text);
+  },
+
+  handler: async (
+    runtime: IAgentRuntime,
+    message: Memory,
+    _state?: State,
+    _options?: unknown,
+    callback?: HandlerCallback
+  ): Promise<ActionResult> => {
+    const text = message.content?.text ?? '';
+    const match = text.match(/[a-f0-9][a-f0-9-]{7,}/i);
+    if (!match) {
+      return { success: false, error: 'no task_id found in message' };
+    }
+    const task_id = match[0];
+
+    const url = `${getWorkerUrl(runtime)}/audit/${encodeURIComponent(task_id)}/verify`;
+
+    let response: Response;
+    try {
+      response = await fetch(url);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { success: false, error: `cloudflare worker fetch failed: ${msg}` };
+    }
+
+    if (!response.ok) {
+      const body = await response.text();
+      return { success: false, error: `verify returned ${response.status}: ${body}` };
+    }
+
+    const data = (await response.json()) as VerifyResponse;
+
+    const summary = data.valid
+      ? `Decision log for task ${task_id}: chain valid against current KV state.`
+      : `Decision log for task ${task_id}: chain BROKEN at seq ${data.broken_at}.`;
+
+    if (callback) {
+      await callback({ text: summary, source: 'cloudflare-worker' });
+    }
+
+    return {
+      success: true,
+      text: summary,
+      values: { valid: data.valid },
+      data: { task_id, ...data },
+    };
+  },
+
+  examples: [
+    [
+      {
+        name: '{{user1}}',
+        content: { text: 'verify decision log for task 9b6e7c3a-2e4d-4f5a-9c1d-7e2b8a6f3d10' },
+      },
+      {
+        name: '{{agent}}',
+        content: {
+          text: 'Decision log for task 9b6e7c3a-...: chain valid against current KV state.',
+          actions: ['VERIFY_DECISION_LOG'],
+        },
+      },
+    ],
+  ],
 };
 
-export default costRouterPlugin;
+export const cloudflarePlugin: Plugin = {
+  name: 'cloudflare',
+  description:
+    'Cloudflare integration for ElizaOS agents. KV-backed response cache + replayable decision log with integrity check + experimental cost-aware model router, all running on a single Worker.',
+  actions: [classifyTradingSentiment, verifyDecisionLog],
+};
+
+// Backwards-compatible alias for v0.1 imports.
+export const costRouterPlugin = cloudflarePlugin;
+
+export default cloudflarePlugin;
