@@ -33,7 +33,11 @@ import type { Character } from '@elizaos/core';
 
 export const character: Character = {
   name: 'YourAgent',
-  plugins: [cloudflarePlugin],
+  plugins: [
+    cloudflarePlugin,
+    // Common pairings: @elizaos/plugin-discord (run as a Discord bot),
+    // @elizaos/plugin-telegram, @elizaos/plugin-bootstrap, @elizaos/plugin-anthropic
+  ],
   settings: {
     CLOUDFLARE_WORKER_URL: 'https://elizaos-cloudflare.<your-subdomain>.workers.dev',
   },

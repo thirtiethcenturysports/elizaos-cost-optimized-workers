@@ -7,7 +7,8 @@ Two pieces of code in this repo:
 
 ```
 ┌─────────────────────────────────────────┐
-│ Your ElizaOS Agent (anywhere)           │
+│ Your ElizaOS Agent                      │
+│ (Discord bot, Telegram, web, CLI, ...)  │
 │                                         │
 │  Plugin: @thirtieth/elizaos-plugin-     │
 │           cloudflare                    │
