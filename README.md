@@ -2,6 +2,13 @@
 
 Drop-in [ElizaOS](https://elizaos.com) plugin that routes LLM calls through a Cloudflare Worker with confidence-based model downgrade, KV response caching, and an append-only audit log.
 
+```bash
+npm install @thirtieth/elizaos-plugin-cf-cost-router
+```
+
+[![npm](https://img.shields.io/npm/v/@thirtieth/elizaos-plugin-cf-cost-router.svg)](https://www.npmjs.com/package/@thirtieth/elizaos-plugin-cf-cost-router)
+[![license](https://img.shields.io/npm/l/@thirtieth/elizaos-plugin-cf-cost-router.svg)](./LICENSE)
+
 > Built for the ElizaOS framework. Not affiliated with the ElizaOS team.
 
 ## What this is
