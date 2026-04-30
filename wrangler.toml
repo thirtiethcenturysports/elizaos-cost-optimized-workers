@@ -13,7 +13,6 @@ id = "REPLACE_WITH_KV_NAMESPACE_ID"
 # Vars (non-secret config)
 [vars]
 CACHE_TTL_SECONDS = "3600"
-CACHE_MAX_ENTRIES = "1000"
 CONFIDENCE_THRESHOLD = "0.75"
 CHEAP_MODEL = "claude-haiku-4-5"
 EXPENSIVE_MODEL = "claude-sonnet-4-6"

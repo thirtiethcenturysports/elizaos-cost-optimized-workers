@@ -29,7 +29,7 @@ One Worker, one route, one ElizaOS Action. Reproducible benchmark included.
 | **Optimized (Haiku-first + escalation)** | **$0.032** | **53%** |
 | Optimized + warm cache (2nd pass) | $0.000 | 100% |
 
-**53% cost reduction**, single pass, cold cache, Haiku-first routing with 20% escalation rate to Sonnet. **77% reduction** over two passes once the cache warms.
+**53% cost reduction**, single pass, cold cache, Haiku-first routing with 20% escalation rate to Sonnet. **76.6% reduction** over two passes once the cache warms.
 
 Numbers above come from running the included 100-prompt trading-sentiment corpus in `--mode=mock` (deterministic, free). Run `--mode=live` with your Anthropic key to verify against the real API. Full methodology in [bench/results.md](./bench/results.md).
 
@@ -41,7 +41,9 @@ npm install @thirtieth/elizaos-plugin-cf-cost-router
 
 Peer dependency: `@elizaos/core ^1.7.2`.
 
-## Quickstart (3 minutes)
+## Quickstart
+
+You need a Cloudflare account and an Anthropic API key. First-time setup runs about 10 minutes (mostly waiting on `wrangler login` and the first deploy).
 
 ### 1. Deploy the Worker
 
@@ -49,14 +51,15 @@ Peer dependency: `@elizaos/core ^1.7.2`.
 git clone https://github.com/thirtiethcenturysports/elizaos-cost-optimized-workers.git
 cd elizaos-cost-optimized-workers
 npm install
-cp .dev.vars.example .dev.vars   # add your ANTHROPIC_API_KEY
-npx wrangler kv:namespace create "ROUTER_KV"
-# Paste the returned id into wrangler.toml
-npx wrangler secret put ANTHROPIC_API_KEY
-npx wrangler deploy
+cp .dev.vars.example .dev.vars     # paste your ANTHROPIC_API_KEY here for `wrangler dev`
+npx wrangler login                 # if not already logged in
+npx wrangler kv namespace create ROUTER_KV
+# Copy the returned id into wrangler.toml, replacing REPLACE_WITH_KV_NAMESPACE_ID
+npx wrangler deploy                # first deploy provisions the Worker subdomain
+npx wrangler secret put ANTHROPIC_API_KEY   # interactive; secrets require an existing deployment
 ```
 
-You'll get a URL like `https://elizaos-cost-router.<your-subdomain>.workers.dev`.
+You'll get a URL like `https://elizaos-cost-router.<your-subdomain>.workers.dev`. Check `/health` to confirm it's live.
 
 ### 2. Wire the plugin into your ElizaOS character
 

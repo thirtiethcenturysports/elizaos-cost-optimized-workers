@@ -53,6 +53,8 @@ export class ResponseCache {
   }
 
   private async bumpStat(field: keyof CacheStats): Promise<void> {
+    // Read-modify-write on KV. Concurrent bumps can lose increments. Acceptable
+    // for a demo stats counter; for production swap to a Durable Object.
     const current = await this.stats();
     current[field] += 1;
     await this.kv.put(STATS_KEY, JSON.stringify(current));

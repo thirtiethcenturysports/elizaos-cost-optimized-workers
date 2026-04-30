@@ -36,6 +36,10 @@ export class AuditLog {
   constructor(private readonly kv: KVNamespace) {}
 
   async append(entry: NewEntry): Promise<AuditEntry> {
+    // Single-writer-per-task assumption: the seq + tail read-modify-write is
+    // not atomic. Concurrent appends to the same task_id can clobber. The
+    // /classify flow is single-writer per task_id by construction; if you
+    // fan out work under one task_id, switch to a Durable Object.
     const tail = await this.getTail(entry.task_id);
     const seq = tail ? tail.seq + 1 : 0;
     const prev_hash = tail ? tail.entry_hash : 'GENESIS';

@@ -3,7 +3,7 @@
 **Mode:** mock
 **Corpus:** 100 trading-sentiment prompts (30 bullish, 30 bearish, 20 neutral, 20 ambiguous)
 **Run duration:** 0.00s
-**Generated:** 2026-04-30T15:53:50.266Z
+**Generated:** 2026-04-30T15:59:59.729Z
 
 ## Headline
 
